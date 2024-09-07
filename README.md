@@ -1,1 +1,1 @@
-An emulator within rust complete with instructions, labels and functions
+An emulator within rust complete with instructions, labels, functions and breakpoints
