@@ -282,56 +282,6 @@ create_instructions!(
     Or => 24
 );
 
-fn get_pointer_to_value(computer: &Computer, index:CpuArchitecture, size: CpuArchitecture) -> Result<CpuArchitecture> {
-    let mut buffer = [0u8;size_of::<CpuArchitecture>()];
-    let sized_buffer = &mut buffer[..size as usize];
-
-    computer.ram().read_buffer_at_checked(index, sized_buffer)?;
-    Ok(CpuArchitecture::from_ne_bytes(buffer))
-}
-
-fn set_pointer_to_value(computer: &mut Computer, index:CpuArchitecture, value: CpuArchitecture, size: CpuArchitecture) -> Result<()> {
-    let bytes = value.to_ne_bytes();
-    let sized_bytes = &bytes[..size as usize];
-
-    computer.ram_mut().write_buffer_at_checked(index, sized_bytes)?;
-    Ok(())
-}
-
-pub fn read_operand(operand: Operand, computer: &Computer) -> Result<CpuArchitecture> {
-    Ok(match operand {
-        Operand::Register(register) => computer.cpu().get_register(register)?,
-        Operand::RegisterPointer(register_pointer) => {
-            let register_value = computer.cpu().get_register(register_pointer.register())?;
-            let size = register_pointer.pointed_to_size();
-            get_pointer_to_value(computer, register_value, size)?
-        },
-        Operand::LiteralPointer(literal_pointer) => {
-            let size = literal_pointer.pointed_to_size();
-            get_pointer_to_value(computer, literal_pointer.address(), size)?
-        },
-        Operand::Literal(literal) => literal.literal(),
-        Operand::Nop => return Err(InstructionError::new(InstructionErrorKind::OperandNop)),
-    })
-}
-
-pub fn write_operand(operand: Operand, computer: &mut Computer, value: CpuArchitecture) -> Result<()> {
-    match operand {
-        Operand::Register(register) => computer.cpu_mut().set_register(register, value)?,
-        Operand::RegisterPointer(register_pointer) => {
-            let register_value = computer.cpu().get_register(register_pointer.register())?;
-            let size = register_pointer.pointed_to_size();
-            set_pointer_to_value(computer, register_value, value, size)?;
-        },
-        Operand::LiteralPointer(literal_pointer) => {
-            let size = literal_pointer.pointed_to_size();
-            set_pointer_to_value(computer, literal_pointer.address(), value, size)?;
-        },
-        _ => return Err(InstructionError::new(InstructionErrorKind::DestinationInvalid)),
-    };
-    Ok(())
-}
-
 fn create_invalid_op_count_error(str:&str, got:impl Display, expected:CpuArchitecture) -> InstructionError {
     InstructionError::with_message(InstructionErrorKind::InvalidOperandCount, format!("line: {}, got {} operands, expected {}", str, got, expected))
 }
@@ -342,9 +292,9 @@ empty_instruction!(Exit, | computer: &mut Computer | {
 });
 
 operand_instruction!(Mov, | mov: Mov, computer: &mut Computer | {
-    let value = read_operand(mov.source, computer)?;
+    let value = mov.source.read_from_computer(computer)?;
         
-    write_operand(mov.destination, computer, value)
+    mov.destination.write_to_computer(computer, value)
 }, destination, source);
 
 macro_rules! operation_instruction {
@@ -353,12 +303,12 @@ macro_rules! operation_instruction {
         $operation: expr
     ) => {
         operand_instruction!($operation_name, | operation: $operation_name, computer: &mut Computer | {
-            let value = read_operand(operation.destination, computer)?;
-            let value2 = read_operand(operation.source, computer)?;
+            let value = operation.destination.read_from_computer(computer)?;
+            let value2 = operation.source.read_from_computer(computer)?;
     
             let final_value = ($operation)(value, value2);
             
-            write_operand(operation.destination, computer, final_value)
+            operation.destination.write_to_computer(computer, final_value)
         }, destination, source);
     };
 }
@@ -375,7 +325,7 @@ operation_instruction!(Or, | a:CpuArchitecture, b | { a | b });
 
 operand_instruction!(Call, | call:Call, computer:&mut Computer | {
     let current_addr = computer.cpu().get_program_counter();
-    let address = read_operand(call.address, computer)?;
+    let address = call.address.read_from_computer(computer)?;
     computer.cpu_mut().set_program_counter(address);
     computer.cpu_mut().push(&current_addr)?;
     Ok(())
@@ -510,7 +460,7 @@ enum SyscallFunction {
 }
 
 operand_instruction!(Push, | push:Push, computer: &mut Computer | -> Result<()> {
-    let value = read_operand(push.source, computer)?;
+    let value = push.source.read_from_computer(computer)?;
     
     let buffer = IntoBytes::into(&value);
     computer.cpu_mut().push_buffer(&buffer[..push.source.size() as usize])?;
@@ -523,7 +473,7 @@ operand_instruction!(Pop, | pop:Pop, computer: &mut Computer | -> Result<()> {
     computer.cpu_mut().pop_buffer(&mut buffer[..pop.destination.size() as usize])?;
     
     let value:CpuArchitecture = FromBytes::from(buffer);
-    write_operand(pop.destination, computer, value)?;
+    pop.destination.write_to_computer(computer, value)?;
     
     Ok(())
 }, destination);
@@ -532,7 +482,7 @@ operand_instruction!(Pop, | pop:Pop, computer: &mut Computer | -> Result<()> {
 operand_instruction!(Jmp, | jmp:Jmp, computer:&mut Computer | -> Result<()> {
     let cmp_flag = computer.cpu_mut().get_cmp_flag();
     if cmp_flag {
-        let address = read_operand(jmp.address, computer)?;
+        let address = jmp.address.read_from_computer(computer)?;
         computer.cpu_mut().set_program_counter(address);
     }
     Ok(())
@@ -553,8 +503,8 @@ impl From<Operand> for Jmp {
 macro_rules! cmp_instruction {
     ($name:ident, $comparison:expr) => {
         operand_instruction!($name, | compare: $name, computer: &mut Computer | -> Result<()> {
-            let value1 = read_operand(compare.a, computer)?;
-            let value2 = read_operand(compare.b, computer)?;
+            let value1 = compare.a.read_from_computer(computer)?;
+            let value2 = compare.b.read_from_computer(computer)?;
             
             let cmp = ($comparison)(value1, value2);
             computer.cpu_mut().set_cmp_flag(cmp);
@@ -573,7 +523,7 @@ cmp_instruction!(Cmpg, | a, b | { a > b });
 
 operand_instruction!(Set, | set:Set, computer: &mut Computer | {
     let flag = computer.cpu_mut().get_cmp_flag();
-    write_operand(set.destination, computer, flag as CpuArchitecture)
+    set.destination.write_to_computer(computer, flag as CpuArchitecture)
 }, destination);
 
 empty_instruction!(Break, | computer: &mut Computer | -> Result<()> {

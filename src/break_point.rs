@@ -10,7 +10,6 @@ use std::io::stdin;
 use std::ops::Deref;
 use std::str::FromStr;
 use crate::cpu::CpuArchitecture;
-use crate::instructions::read_operand;
 use crate::operand::Operand;
 
 enum StaticString {
@@ -144,7 +143,7 @@ break_commands!(register => | computer, register | {
         Err(err) => return Some(err.to_string().into()),
     };
     
-    let result = read_operand(address_operand, computer);
+    let result = address_operand.read_from_computer(computer);
     let address = match result {
         Ok(address) => address,
         Err(err) => return Some(err.to_string().into()),

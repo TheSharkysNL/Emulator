@@ -3,6 +3,7 @@ use crate::cpu::CpuArchitecture;
 use std::result::Result;
 use std::str::FromStr;
 use std::io::{Read as IORead, Write as IOWrite};
+use crate::computer::Computer;
 use crate::instructions::{InstructionError, InstructionErrorKind};
 use crate::read_ext::ReadLine;
 use crate::write_ext::WriteExt;
@@ -123,6 +124,36 @@ impl Operand {
             Operand::RegisterPointer(pointer) => pointer.pointer.pointed_to_size(),
             Operand::Nop => 0,
         }
+    }
+    
+    pub fn read_from_computer(self, computer: &Computer) -> Result<CpuArchitecture, InstructionError> {
+        Ok(match self {
+            Operand::Register(register) => computer.cpu().get_register(register)?,
+            Operand::RegisterPointer(register_pointer) => {
+                let register_value = computer.cpu().get_register(register_pointer.register())?;
+                register_pointer.pointer.get_pointed_to_value(register_value, computer)?
+            },
+            Operand::LiteralPointer(literal_pointer) => {
+                literal_pointer.pointer.get_pointed_to_value(literal_pointer.address(), computer)?
+            },
+            Operand::Literal(literal) => literal.literal(),
+            Operand::Nop => return Err(InstructionError::new(InstructionErrorKind::OperandNop)),
+        })
+    }
+
+    pub fn write_to_computer(self, computer: &mut Computer, value: CpuArchitecture) -> Result<(), InstructionError> {
+        match self {
+            Operand::Register(register) => computer.cpu_mut().set_register(register, value)?,
+            Operand::RegisterPointer(register_pointer) => {
+                let register_value = computer.cpu().get_register(register_pointer.register())?;
+                register_pointer.pointer.set_pointed_to_value(register_value, computer, value)?;
+            },
+            Operand::LiteralPointer(literal_pointer) => {
+                literal_pointer.pointer.set_pointed_to_value(literal_pointer.address(), computer, value)?;
+            },
+            _ => return Err(InstructionError::new(InstructionErrorKind::DestinationInvalid)),
+        };
+        Ok(())
     }
 }
 
@@ -328,6 +359,22 @@ impl Pointer {
     pub const fn binary_size() -> CpuArchitecture {
         size_of::<u8>() as CpuArchitecture
     }
+    
+    pub fn get_pointed_to_value(self, index: CpuArchitecture, computer: &Computer) -> Result<CpuArchitecture, InstructionError> {
+        let mut buffer = [0u8;size_of::<CpuArchitecture>()];
+        let sized_buffer = &mut buffer[..self.pointed_to_size() as usize];
+
+        computer.ram().read_buffer_at_checked(index, sized_buffer)?;
+        Ok(CpuArchitecture::from_ne_bytes(buffer))
+    }
+    
+    pub fn set_pointed_to_value(self, index: CpuArchitecture, computer: &mut Computer, value: CpuArchitecture) -> Result<(), InstructionError> {
+        let bytes = value.to_ne_bytes();
+        let sized_bytes = &bytes[..self.pointed_to_size() as usize];
+
+        computer.ram_mut().write_buffer_at_checked(index, sized_bytes)?;
+        Ok(())
+    }
 }
 
 impl LiteralPointer {
@@ -345,6 +392,10 @@ impl LiteralPointer {
     pub fn address(self) -> CpuArchitecture {
         self.literal.literal()
     }
+
+    pub fn pointer(self) -> Pointer {
+        self.pointer
+    }
 }
 
 impl RegisterPointer {
@@ -361,5 +412,9 @@ impl RegisterPointer {
 
     pub fn register(self) -> Register {
         self.register
+    }
+    
+    pub fn pointer(self) -> Pointer {
+        self.pointer
     }
 }
