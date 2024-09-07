@@ -23,6 +23,22 @@ pub struct Pointer {
     value: u8,
 }
 
+pub trait PointerType : Copy + Clone {
+    fn address(self, computer: &Computer) -> Result<CpuArchitecture, InstructionError>;
+    
+    fn pointer(self) -> Pointer;
+    
+    fn set_pointed_to_value(self, computer: &mut Computer, value: CpuArchitecture) -> Result<(), InstructionError> {
+        let address = self.address(computer)?;
+        self.pointer().set_pointed_to_value(address, computer, value)
+    }
+    
+    fn get_pointed_to_value(self, computer: &Computer) -> Result<CpuArchitecture, InstructionError> {
+        let address = self.address(computer)?;
+        self.pointer().get_pointed_to_value(address, computer)
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Default, Debug)]
 pub struct RegisterPointer {
     pointer: Pointer,
@@ -127,33 +143,30 @@ impl Operand {
     }
     
     pub fn read_from_computer(self, computer: &Computer) -> Result<CpuArchitecture, InstructionError> {
-        Ok(match self {
-            Operand::Register(register) => computer.cpu().get_register(register)?,
-            Operand::RegisterPointer(register_pointer) => {
-                let register_value = computer.cpu().get_register(register_pointer.register())?;
-                register_pointer.pointer.get_pointed_to_value(register_value, computer)?
-            },
-            Operand::LiteralPointer(literal_pointer) => {
-                literal_pointer.pointer.get_pointed_to_value(literal_pointer.address(), computer)?
-            },
-            Operand::Literal(literal) => literal.literal(),
-            Operand::Nop => return Err(InstructionError::new(InstructionErrorKind::OperandNop)),
-        })
+        match self {
+            Operand::Register(register) => 
+                computer.cpu().get_register(register).or_else(| err | { Err(err.into()) }),
+            Operand::RegisterPointer(register_pointer) => 
+                register_pointer.get_pointed_to_value(computer),
+            Operand::LiteralPointer(literal_pointer) => 
+                literal_pointer.get_pointed_to_value(computer),
+            Operand::Literal(literal) => 
+                Ok(literal.literal()),
+            Operand::Nop => 
+                Err(InstructionError::new(InstructionErrorKind::OperandNop)),
+        }
     }
 
     pub fn write_to_computer(self, computer: &mut Computer, value: CpuArchitecture) -> Result<(), InstructionError> {
         match self {
-            Operand::Register(register) => computer.cpu_mut().set_register(register, value)?,
-            Operand::RegisterPointer(register_pointer) => {
-                let register_value = computer.cpu().get_register(register_pointer.register())?;
-                register_pointer.pointer.set_pointed_to_value(register_value, computer, value)?;
-            },
-            Operand::LiteralPointer(literal_pointer) => {
-                literal_pointer.pointer.set_pointed_to_value(literal_pointer.address(), computer, value)?;
-            },
-            _ => return Err(InstructionError::new(InstructionErrorKind::DestinationInvalid)),
-        };
-        Ok(())
+            Operand::Register(register) => 
+                computer.cpu_mut().set_register(register, value).or_else(| err | Err(err.into())),
+            Operand::RegisterPointer(register_pointer) => 
+                register_pointer.set_pointed_to_value(computer, value),
+            Operand::LiteralPointer(literal_pointer) => 
+                literal_pointer.set_pointed_to_value(computer, value),
+            _ => Err(InstructionError::new(InstructionErrorKind::DestinationInvalid)),
+        }
     }
 }
 
@@ -392,8 +405,14 @@ impl LiteralPointer {
     pub fn address(self) -> CpuArchitecture {
         self.literal.literal()
     }
+}
 
-    pub fn pointer(self) -> Pointer {
+impl PointerType for LiteralPointer {
+    fn address(self, _: &Computer) -> Result<CpuArchitecture, InstructionError> {
+        Ok(self.literal.literal())
+    }
+
+    fn pointer(self) -> Pointer {
         self.pointer
     }
 }
@@ -413,8 +432,14 @@ impl RegisterPointer {
     pub fn register(self) -> Register {
         self.register
     }
-    
-    pub fn pointer(self) -> Pointer {
+}
+
+impl PointerType for RegisterPointer {
+    fn address(self, computer: &Computer) -> Result<CpuArchitecture, InstructionError> {
+        computer.cpu().get_register(self.register()).or_else(| err | Err(err.into()))
+    }
+
+    fn pointer(self) -> Pointer {
         self.pointer
     }
 }
