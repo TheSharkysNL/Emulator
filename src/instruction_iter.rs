@@ -57,10 +57,6 @@ impl<'a> InstructionsIter<'a> {
             binary_position: 0,
         }
     }
-    
-    pub fn binary_position(&self) -> CpuArchitecture {
-        self.binary_position
-    }
 }
 
 impl<'a> Iterator for InstructionsIter<'a> {
