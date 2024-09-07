@@ -1,0 +1,16 @@
+print:
+    push x7
+    mov x7, x8
+    push x1
+    push x2
+    push x3
+    mov x2, x7
+    mov x3, 2
+    mov x1, 2
+    syscall
+    
+    pop x3
+    pop x2
+    pop x1
+    pop x7
+    ret

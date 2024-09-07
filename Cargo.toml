@@ -1,0 +1,16 @@
+[package]
+name = "emulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enum_dispatch = "0.3.13"
+#paste = "1.0.15"
+strum = { version = "0.26.3", features = ["strum_macros", "derive"] }
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+num = "0.4.3"
+clap = { version = "4.5.16" }
+clap_derive = "4.5.13"
+glium = "0.35.0"
+itertools = "0.13.0"

@@ -1,0 +1,96 @@
+memcpy: ; (destination*, source*, length)
+    push x1
+    push x2
+    push x3
+    
+    add x3, x1
+    sub x3, 1 ; set x3 to the destination end - 1
+    
+    .loop 
+        mov word[x1], word[x2] ; move values from source to destination
+        
+        add x1, 2
+        add x2, 2
+        cmpl x1, x3
+        jmp loop
+    
+    cmpne x1, x3
+    jmp exit
+    
+    ; if length is uneven move the last byte as well
+    mov byte[x1], byte[x2]
+    
+    .exit
+        pop x3
+        pop x2
+        pop x1
+        ret
+
+memeq: ; (a*, b*, length)
+    push x1
+    push x2
+    
+    mov x4, x1
+    add x4, x3 
+    sub x4, 1 ; set x4 to the destination end - 1
+    
+    .loop2 
+        cmpne word[x1], word[x2]
+        jmp not equal
+        
+        add x1, 2
+        add x2, 2
+        cmpl x1, x4
+        jmp loop2
+        
+    cmpne x1, x4 
+    jmp equal
+    
+    ; if length is uneven cmp last byte as well
+    cmpe byte[x1], byte[x2]
+    set x4
+    jmp exit2
+        
+    .equal
+        mov x4, 1
+        jmp exit2
+    .not equal
+        mov x4, 0
+    .exit2
+        pop x2
+        pop x1
+        ret
+        
+memset: ; (destination*, length, byte value)
+    push x1
+    push x2
+    push l3
+    push x4
+    
+    mov x4, l3 ; turn the byte value into a 2 byte value
+    shl x4, 8
+    mov x4, l3
+    
+    add x2, x1
+    sub x2, 1  ; set x2 to the destination end - 1
+    
+    .loop3
+        mov word[x1], x4
+        
+        add x1, 2
+        
+        cmpl x1, x2
+        jmp loop3
+    
+    cmpne x1, x2
+    jmp exit3
+    
+    ; if length is uneven move the last byte as well
+    mov byte[x1], l4
+   
+    .exit3
+        pop x4
+        pop l3
+        pop x2
+        pop x1
+        ret

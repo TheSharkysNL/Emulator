@@ -1,0 +1,18 @@
+mov x1, 100
+mov x3, x1
+call allocation::alloc
+mov x2, 0
+mov x4, x1
+.loop
+    mov byte[x4], x2
+    add x2, 1
+    add x4, 1
+    cmpl x2, x3
+    jmp loop
+
+mov x2, x1
+mov x1, 2
+syscall
+mov x1, x4
+call allocation::dealloc
+exit

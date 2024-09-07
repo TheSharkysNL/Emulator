@@ -1,0 +1,125 @@
+main:
+    mov x8, sp
+    
+    push 25940 ; push the string test to the stack
+    push 29811
+    
+    mov x1, 3
+    mov x2, x8
+    mov x3, 4
+    mov x4, 26
+    mov x5, 26
+    syscall
+    mov x6, x2
+    mov x5, 0
+    
+    mov sp, x8 ; pop values from stack
+    mov x9, x8
+    
+    push 0xFF00 ; push red onto stack
+    push 0x00FF
+    push 0x00FF ; push green onto stack
+    push 0x00FF 
+    push 0x0000 ; push blue onto stack
+    push 0xFFFF
+    push 0xFFFF ; push white onto stack
+    push 0xFFFF
+    push 0xFFFF ; push yellow onto stack
+    push 0x00FF
+    push 0xFF99 ; push orange onto stack
+    push 0x00FF
+    push 0xFF00 ; push pink onto stack
+    push 0xE1FF
+    push 0xA020 ; push purple onto stack
+    push 0xF0FF
+    push 0x00FF ; push light green onto stack
+    push 0x8CFF
+    push 0x00CC ; push light blue onto stack
+    push 0xFFFF
+    push 0x0000 ; push black onto stack
+    push 0xFFFF
+    
+    .loop
+        mov x1, 4
+        syscall
+        
+        cmpe x2, 1
+        jmp mouse ; check for mouse move
+        
+        cmpe x2, 2
+        jmp click ; check for click
+        
+        cmpe x2, 3
+        jmp keyboard ; check for keyboard button press
+        
+        jmp exit
+        
+    .keyboard
+        cmpe x4, 1 ; check if key is down and not up
+        jmp exit
+        
+        sub x3, 48 
+        cmpg x3, 9 ; check if 0 through 9 is pressed if not goto exit
+        jmp exit
+        
+        mov x9, x8
+        mul x3, 4
+        add x9, x3 ; get offset into stack
+    
+    .click
+    
+        cmpe x4, 0 ; check for left click
+        set x5
+        mul x5, x3 ; if not clicked set to 0
+        
+        cmpne x5, 0
+        jmp exit
+        
+        cmpe x4, 1 ; check for right click
+        set x5
+        mul x5, 2 ; right click = 2
+        mul x5, x3 ; if not clicked set to 0
+        
+        jmp exit
+    
+    .mouse 
+        mul x4, 26
+        add x4, x3
+        mul x4, 4
+        add x4, x6
+        
+        cmpge x5, 1
+        jmp draw
+        jmp exit
+    
+    .draw
+        mov x10, 40 ; place black if right mouse button is pressed
+        add x10, x7
+        cmpe x5, 2
+        
+        jmp place color
+        
+        mov x10, x9 ; move current color to x9
+        
+    .place color
+        ;mov x3, byte[x4] ; check if same color has not been placed already
+        ;cmpe x3, x1
+        ;jmp exit
+        
+        mov word[x4], word[x10]
+        add x4, 2
+        add x10, 2
+        mov word[x4], word[x10]
+        
+        mov x1, 5
+        syscall ; redraw
+    
+    .exit ; check for exit
+        cmpne x2, 0
+        jmp loop
+    
+    mov x1, 0
+    exit
+    
+
+   
